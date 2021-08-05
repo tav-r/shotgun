@@ -1,8 +1,9 @@
-use crate::lib::ParamNameVal;
 use std::error::Error;
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use std::sync::Arc;
+use url::Url;
+use urlencoding;
 
 fn rand_string() -> String {
     thread_rng()
@@ -12,61 +13,58 @@ fn rand_string() -> String {
         .collect()
 }
 
-fn replace_param_val_at(url: &str, par_name: &str, val: &str, new_val: &str, index: usize) -> String {
-    format!(
-        "{}{}",
-        &url[..index],
-        &url[index..].replacen(
-            &format!("{}={}", par_name, val),
-            &format!("{}={}", par_name, new_val),
-            1
-        ).trim()
-    )
-}
-
-fn replace_vals<'a>(
-    url: &str, param_vals: &'a Vec<ParamNameVal<'_>>,
-    replace_val: &'a str
-) -> Vec<(String, ParamNameVal<'a>)> {
+fn replace_vals(
+    url: &mut Url,
+) -> Vec<Url> {
     let mut res = Vec::new();
-    for p in param_vals.iter() {
-        res.push((
-            replace_param_val_at(url, p.parameter, p.value, &replace_val, p.index),
-            ParamNameVal{parameter: p.parameter, value: &replace_val, index: p.index}
-        ))
+    for i in 0..url.query_pairs().count() {
+        let mut new_url = url.clone();
+
+        new_url.set_query(Some(
+            &url.query_pairs().enumerate().map(
+                |(j, p)| format!("{}={}", p.0, if i == j {rand_string()} else {String::from(p.1)})
+            ).collect::<Vec<String>>().join("&")
+        ));
+
+        res.push(new_url);
     }
 
     res
 }
 
 pub async fn check_response(
-    url: &str,
-    params: &Vec<ParamNameVal<'_>>,
+    url: &mut Url,
     cookie_str: &str,
     picky: bool
 ) -> Result<(), Box<dyn Error>> {
-    for (url, new_param) in replace_vals(url, params, &rand_string()) {
+    for (i, url) in replace_vals(url).iter().enumerate() {
         let jar = Arc::new(reqwest::cookie::Jar::default());
-        jar.add_cookie_str(cookie_str, &url.parse::<reqwest::Url>().unwrap());
+        jar.add_cookie_str(cookie_str, &url.as_str().parse::<reqwest::Url>().unwrap());
 
         if let Ok(res) = reqwest::Client::builder()
             .cookie_provider(jar)
             .build()?
-            .get(&url)
+            .get(url.as_str())
             .send().await {
+                let (key, val) = url.query_pairs().enumerate()
+                    .filter(|(j, _)| *j == i)
+                    .map(|(_, p)| (String::from(p.0), String::from(p.1)))
+                    .collect::<Vec<(String, String)>>().pop().unwrap();
+
                 let body = &res.text().await?;
-                if body.contains(new_param.value) {
+                if body.contains(&val) {
                     if picky { 
-                        // make sure that at least one of the matches is not a 'key=value' match
-                        let n_val_reflected = body.matches(new_param.value).count();
-                        let n_url_reflected = body.matches(&format!("{}={}", new_param.parameter, new_param.value)).count() +
-                            body.matches(&format!("{}%3d{}", new_param.parameter, new_param.value)).count() +
-                            body.matches(&format!("{}%3D{}", new_param.parameter, new_param.value)).count();
+                        // make sure that at least one of the matches is not reflected in a URL,
+                        // encoded URL or double-encoded URL
+                        let n_val_reflected = body.matches(&val).count();
+                        let n_url_reflected = body.matches(url.as_str()).count() +
+                            body.matches(urlencoding::encode(url.as_str()).as_ref()).count() +
+                            body.matches(urlencoding::encode(&urlencoding::encode(url.as_str())).as_ref()).count();
 
                         if n_url_reflected == n_val_reflected { continue }
                     }
 
-                    println!("[{}] reflected {}", url, new_param.parameter)
+                    println!("[{}] reflected {}", url, key)
                 }
             }
     }

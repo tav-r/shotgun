@@ -1,6 +1,6 @@
-use super::url::parse::get_params;
 use super::analyze::reflection::check_response;
 use clap::{Arg, App};
+use url::Url;
 
 use std::io::{BufReader,BufRead,stdin};
 use std::error::Error;
@@ -26,13 +26,11 @@ pub async fn from_cli() -> Result<(), Box<dyn Error>> {
 }
 
 async fn run_from_stdin(cookie_string: &str, picky: bool) -> Result<(), Box<dyn Error>> {
-    for line in BufReader::new(stdin()).lines().into_iter()
-        .map(|l| l.unwrap())
-        .filter(
-            |u| u.contains("?") && (u.starts_with("http://") || u.starts_with("https://"))
-        )
+    for url in BufReader::new(stdin()).lines().into_iter()
     {
-        check_response(&line, &get_params(&line), cookie_string, picky).await?
+        if let Ok(mut url_parsed) = Url::parse(&url.unwrap()) {
+            check_response(&mut url_parsed, cookie_string, picky).await?
+        }
     }
 
     Ok(())
