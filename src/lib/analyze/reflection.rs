@@ -5,6 +5,7 @@ use std::sync::Arc;
 use url::Url;
 use super::AnalyzeOptions;
 use urlencoding;
+use html_parser::{Dom,Node};
 
 fn rand_string() -> String {
     thread_rng()
@@ -12,6 +13,44 @@ fn rand_string() -> String {
         .take(20)
         .map(char::from)
         .collect()
+}
+
+fn rec_search_script_child(parent: &Node, needle: &str) -> bool {
+    match parent {
+        Node::Element(elt) => {
+            if elt.name == "script" {
+                for c in elt.children.iter() {
+                    match c {
+                        Node::Text(txt) => {
+                            return txt.contains(needle);
+                        }
+                        _ => continue
+                    }
+                }
+            } else {
+                for c in elt.children.iter() {
+                    if rec_search_script_child(c, needle) {
+                        return true
+                    }
+                }
+            }
+        },
+        _ => return false
+    }
+
+    false
+}
+
+fn reflected_in_script_block(body: &str, val: &str) -> Result<bool, Box<dyn Error>> {
+    if let Ok(dom) = Dom::parse(&body) {
+        for child in dom.children {
+            if rec_search_script_child(&child, &val) {
+                return Ok(true)
+            }
+        }                                    
+    }
+
+    Ok(false)
 }
 
 fn replace_vals(
@@ -52,7 +91,8 @@ pub async fn check_response(
                     .map(|(_, p)| (String::from(p.0), String::from(p.1)))
                     .collect::<Vec<(String, String)>>().pop().unwrap();
 
-                let body = &res.text().await?;
+                let body = res.text().await?;
+
                 if body.contains(&val) {
                     if options.picky { 
                         // make sure that at least one of the matches is not reflected in a URL,
@@ -65,7 +105,13 @@ pub async fn check_response(
                         if n_url_reflected == n_val_reflected { continue }
                     }
 
-                    println!("[{}] reflected {}", url, key)
+                    if options.script_block {
+                        if reflected_in_script_block(&body, &val)? {
+                            println!("[{}] reflected {} in script block", url, key)
+                        }
+                    } else {
+                        println!("[{}] reflected {}", url, key)
+                    }
                 }
             }
     }

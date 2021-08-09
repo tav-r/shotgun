@@ -18,13 +18,18 @@ pub async fn from_cli() -> Result<(), Box<dyn Error>> {
         .arg(Arg::with_name("picky")
             .short("p")
             .long("picky")
-            .help("Only show matches where only the value is reflected and not 'key=value'")
+            .help("Only report matches where the value not (only) reflected as part of the whole URL")
+        )
+        .arg(Arg::with_name("script-block")
+            .short("s")
+            .long("script-block")
+            .help("Only report matches inside HTML <script>-blocks")
         )
         .get_matches();
 
     let options = AnalyzeOptions{
         picky: matches.is_present("picky"),
-        script_block: true
+        script_block: matches.is_present("script-block")
     };
 
     run_from_stdin(matches.value_of("cookie-string").unwrap_or(""), &options).await
