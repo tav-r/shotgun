@@ -1,4 +1,4 @@
-use super::analyze::reflection::check_response;
+use super::analyze::{reflection::check_response,AnalyzeOptions};
 use clap::{Arg, App};
 use url::Url;
 
@@ -22,14 +22,19 @@ pub async fn from_cli() -> Result<(), Box<dyn Error>> {
         )
         .get_matches();
 
-    run_from_stdin(matches.value_of("cookie-string").unwrap_or(""), matches.is_present("picky")).await
+    let options = AnalyzeOptions{
+        picky: matches.is_present("picky"),
+        script_block: true
+    };
+
+    run_from_stdin(matches.value_of("cookie-string").unwrap_or(""), &options).await
 }
 
-async fn run_from_stdin(cookie_string: &str, picky: bool) -> Result<(), Box<dyn Error>> {
+async fn run_from_stdin(cookie_string: &str, options: &AnalyzeOptions) -> Result<(), Box<dyn Error>> {
     for url in BufReader::new(stdin()).lines().into_iter()
     {
         if let Ok(mut url_parsed) = Url::parse(&url.unwrap()) {
-            check_response(&mut url_parsed, cookie_string, picky).await?
+            check_response(&mut url_parsed, cookie_string, &options).await?
         }
     }
 

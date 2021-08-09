@@ -3,6 +3,7 @@ use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use std::sync::Arc;
 use url::Url;
+use super::AnalyzeOptions;
 use urlencoding;
 
 fn rand_string() -> String {
@@ -35,7 +36,7 @@ fn replace_vals(
 pub async fn check_response(
     url: &mut Url,
     cookie_str: &str,
-    picky: bool
+    options: &AnalyzeOptions
 ) -> Result<(), Box<dyn Error>> {
     for (i, url) in replace_vals(url).iter().enumerate() {
         let jar = Arc::new(reqwest::cookie::Jar::default());
@@ -53,7 +54,7 @@ pub async fn check_response(
 
                 let body = &res.text().await?;
                 if body.contains(&val) {
-                    if picky { 
+                    if options.picky { 
                         // make sure that at least one of the matches is not reflected in a URL,
                         // encoded URL or double-encoded URL
                         let n_val_reflected = body.matches(&val).count();
