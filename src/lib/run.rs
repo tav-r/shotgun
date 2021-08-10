@@ -4,6 +4,7 @@ use url::Url;
 
 use std::io::{BufReader,BufRead,stdin};
 use std::error::Error;
+use futures::future::{try_join_all};
 
 pub async fn from_cli() -> Result<(), Box<dyn Error>> {
     let matches = App::new("shotgun")
@@ -36,12 +37,16 @@ pub async fn from_cli() -> Result<(), Box<dyn Error>> {
 }
 
 async fn run_from_stdin(cookie_string: &str, options: &AnalyzeOptions) -> Result<(), Box<dyn Error>> {
-    for url in BufReader::new(stdin()).lines().into_iter()
+    let mut jobs = Vec::new();
+    for url_parsed in BufReader::new(stdin()).lines().into_iter()
+        .map(|url_str| Url::parse(&url_str.unwrap()))
+        .filter(|url| url.is_ok())
+        .map(|url| url.unwrap())
     {
-        if let Ok(mut url_parsed) = Url::parse(&url.unwrap()) {
-            check_response(&mut url_parsed, cookie_string, &options).await?
-        }
+        jobs.push(check_response(url_parsed, cookie_string, &options));
     }
+
+    try_join_all(jobs).await?;
 
     Ok(())
 }

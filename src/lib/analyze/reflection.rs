@@ -41,16 +41,16 @@ fn rec_search_script_child(parent: &Node, needle: &str) -> bool {
     false
 }
 
-fn reflected_in_script_block(body: &str, val: &str) -> Result<bool, Box<dyn Error>> {
+fn reflected_in_script_block(body: &str, val: &str) -> bool {
     if let Ok(dom) = Dom::parse(&body) {
         for child in dom.children {
             if rec_search_script_child(&child, &val) {
-                return Ok(true)
+                return true
             }
         }                                    
     }
 
-    Ok(false)
+    false
 }
 
 fn replace_vals(
@@ -73,11 +73,11 @@ fn replace_vals(
 }
 
 pub async fn check_response(
-    url: &mut Url,
+    mut url: Url,
     cookie_str: &str,
     options: &AnalyzeOptions
 ) -> Result<(), Box<dyn Error>> {
-    for (i, url) in replace_vals(url).iter().enumerate() {
+    for (i, url) in replace_vals(&mut url).iter().enumerate() {
         let jar = Arc::new(reqwest::cookie::Jar::default());
         jar.add_cookie_str(cookie_str, &url.as_str().parse::<reqwest::Url>().unwrap());
 
@@ -106,7 +106,7 @@ pub async fn check_response(
                     }
 
                     if options.script_block {
-                        if reflected_in_script_block(&body, &val)? {
+                        if reflected_in_script_block(&body, &val) {
                             println!("[{}] reflected {} in script block", url, key)
                         }
                     } else {
