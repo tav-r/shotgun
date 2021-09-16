@@ -16,6 +16,8 @@ fn rand_string() -> String {
 }
 
 fn rec_search_script_child(parent: &Node, needle: &str) -> bool {
+    // recursively (depth first) search HTML child with name "script"
+
     match parent {
         Node::Element(elt) => {
             if elt.name == "script" {
@@ -42,6 +44,9 @@ fn rec_search_script_child(parent: &Node, needle: &str) -> bool {
 }
 
 fn reflected_in_script_block(body: &str, val: &str) -> bool {
+    // check if `val` is reflected in `body` where `body` is
+    // assumed to be parsable HTML. Notice that errors are silent.
+
     if let Ok(dom) = Dom::parse(&body) {
         for child in dom.children {
             if rec_search_script_child(&child, &val) {
@@ -56,6 +61,9 @@ fn reflected_in_script_block(body: &str, val: &str) -> bool {
 fn replace_vals(
     url: &mut Url,
 ) -> Vec<Url> {
+    // replace values of parameters in url:Url with random strings, return
+    // one URL for each substitution
+
     let mut res = Vec::new();
     for i in 0..url.query_pairs().count() {
         let mut new_url = url.clone();
@@ -77,10 +85,19 @@ pub async fn check_response(
     cookie_str: &str,
     options: &AnalyzeOptions
 ) -> Result<(), Box<dyn Error>> {
+    /// Analyze the parameters of a given URL
+    /// 
+    /// # Arguments
+    /// 
+    /// * `url` - A url:Url that shall be checked
+    /// * `cookie_str` - String slice of the form "cookie1=value1; cookie2=value2" etc.
+    /// * `options` - A super::AnalyzeOptions struct with options for the analysis
+
     for (i, url) in replace_vals(&mut url).iter().enumerate() {
         let jar = Arc::new(reqwest::cookie::Jar::default());
         jar.add_cookie_str(cookie_str, &url.as_str().parse::<reqwest::Url>().unwrap());
 
+        // try to request the resource
         if let Ok(res) = reqwest::Client::builder()
             .cookie_provider(jar)
             .build()?
@@ -94,9 +111,8 @@ pub async fn check_response(
                 let body = res.text().await?;
 
                 if body.contains(&val) {
+                    // picky :<=> filter results where only the full URL is reflected
                     if options.picky { 
-                        // make sure that at least one of the matches is not reflected in a URL,
-                        // encoded URL or double-encoded URL
                         let n_val_reflected = body.matches(&val).count();
                         let n_url_reflected = body.matches(url.as_str()).count() +
                             body.matches(urlencoding::encode(url.as_str()).as_ref()).count() +
@@ -105,6 +121,7 @@ pub async fn check_response(
                         if n_url_reflected == n_val_reflected { continue }
                     }
 
+                    // script_block :<=> report only reflections in <script> block
                     if options.script_block {
                         if reflected_in_script_block(&body, &val) {
                             println!("[{}] reflected {} in script block", url, key)
