@@ -85,13 +85,13 @@ pub async fn check_response(
     cookie_str: &str,
     options: &AnalyzeOptions
 ) -> Result<(), Box<dyn Error>> {
-    /// Analyze the parameters of a given URL
-    /// 
-    /// # Arguments
-    /// 
-    /// * `url` - A url:Url that shall be checked
-    /// * `cookie_str` - String slice of the form "cookie1=value1; cookie2=value2" etc.
-    /// * `options` - A super::AnalyzeOptions struct with options for the analysis
+    // Analyze the parameters of a given URL
+    // 
+    // # Arguments
+    // 
+    // * `url` - A url:Url that shall be checked
+    // * `cookie_str` - String slice of the form "cookie1=value1; cookie2=value2" etc.
+    // * `options` - A super::AnalyzeOptions struct with options for the analysis
 
     for (i, url) in replace_vals(&mut url).iter().enumerate() {
         let jar = Arc::new(reqwest::cookie::Jar::default());
